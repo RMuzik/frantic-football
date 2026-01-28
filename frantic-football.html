@@ -1,0 +1,498 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Frantic Football - 3 Teams</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 20px;
+            background: #1a1a1a;
+            font-family: 'Arial Black', sans-serif;
+            color: white;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+        }
+        
+        #gameCanvas {
+            border: 4px solid #00ff00;
+            background: #0a4d0a;
+            box-shadow: 0 0 30px rgba(0, 255, 0, 0.5);
+            image-rendering: pixelated;
+        }
+        
+        #ui {
+            display: flex;
+            gap: 30px;
+            margin-bottom: 20px;
+            font-size: 24px;
+            text-shadow: 2px 2px 4px black;
+        }
+        
+        .score {
+            padding: 10px 20px;
+            border-radius: 10px;
+            border: 3px solid;
+        }
+        
+        #scoreGreen { background: #00aa00; border-color: #00ff00; }
+        #scoreYellow { background: #aaaa00; border-color: #ffff00; }
+        #scorePurple { background: #aa00aa; border-color: #ff00ff; }
+        
+        #timer {
+            background: #333;
+            padding: 10px 30px;
+            border-radius: 10px;
+            border: 3px solid #fff;
+            font-size: 28px;
+        }
+        
+        #controls {
+            margin-top: 20px;
+            text-align: center;
+            font-size: 14px;
+            color: #aaa;
+        }
+        
+        #startScreen {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.9);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+        }
+        
+        #startScreen h1 {
+            color: #00ff00;
+            font-size: 48px;
+            text-shadow: 0 0 20px #00ff00;
+            margin-bottom: 30px;
+        }
+        
+        .playerSelect {
+            margin: 10px;
+            padding: 15px 30px;
+            font-size: 20px;
+            font-weight: bold;
+            cursor: pointer;
+            border: 3px solid;
+            border-radius: 10px;
+            background: #222;
+            color: white;
+            transition: all 0.3s;
+        }
+        
+        .playerSelect:hover {
+            transform: scale(1.1);
+            box-shadow: 0 0 20px;
+        }
+        
+        #btn1Player { border-color: #00ff00; }
+        #btn1Player:hover { box-shadow: 0 0 20px #00ff00; }
+        #btn2Players { border-color: #ffff00; }
+        #btn2Players:hover { box-shadow: 0 0 20px #ffff00; }
+        #btn3Players { border-color: #ff00ff; }
+        #btn3Players:hover { box-shadow: 0 0 20px #ff00ff; }
+        
+        #gameOver {
+            display: none;
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(0, 0, 0, 0.95);
+            padding: 40px;
+            border: 5px solid #00ff00;
+            border-radius: 20px;
+            text-align: center;
+            z-index: 2000;
+        }
+        
+        #gameOver h2 {
+            color: #00ff00;
+            font-size: 36px;
+            margin-bottom: 20px;
+        }
+        
+        #restartBtn {
+            margin-top: 20px;
+            padding: 15px 40px;
+            font-size: 24px;
+            font-weight: bold;
+            cursor: pointer;
+            border: 3px solid #00ff00;
+            border-radius: 10px;
+            background: #222;
+            color: #00ff00;
+        }
+        
+        #restartBtn:hover {
+            background: #00ff00;
+            color: #000;
+        }
+    </style>
+</head>
+<body>
+    <div id="startScreen">
+        <h1>⚽ FRANTIC FOOTBALL ⚽</h1>
+        <p style="font-size: 18px; margin-bottom: 30px;">Combien de joueurs humains ?</p>
+        <button class="playerSelect" id="btn1Player">1 JOUEUR</button>
+        <button class="playerSelect" id="btn2Players">2 JOUEURS</button>
+        <button class="playerSelect" id="btn3Players">3 JOUEURS</button>
+    </div>
+    
+    <div id="gameOver">
+        <h2 id="winnerText"></h2>
+        <div id="finalScores"></div>
+        <button id="restartBtn">REJOUER</button>
+    </div>
+    
+    <div id="ui">
+        <div class="score" id="scoreGreen">🟢 VERT: 0</div>
+        <div id="timer">⏱️ 2:00</div>
+        <div class="score" id="scoreYellow">🟡 JAUNE: 0</div>
+        <div class="score" id="scorePurple">🟣 VIOLET: 0</div>
+    </div>
+    
+    <canvas id="gameCanvas" width="800" height="800"></canvas>
+    
+    <div id="controls">
+        <p><strong>JOUEUR 1 (VERT):</strong> WASD | <strong>JOUEUR 2 (JAUNE):</strong> Flèches ↑←↓→ | <strong>JOUEUR 3 (VIOLET):</strong> IJKL</p>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        
+        // Configuration
+        const ZONE_SIZE = 200;
+        const PLAYER_RADIUS = 15;
+        const BALL_RADIUS = 10;
+        const GOAL_WIDTH = 80;
+        const GOAL_DEPTH = 20;
+        const GAME_DURATION = 120; // 2 minutes
+        
+        let numHumanPlayers = 0;
+        let gameStarted = false;
+        let timeLeft = GAME_DURATION;
+        let gameOver = false;
+        
+        // Scores
+        const scores = { green: 0, yellow: 0, purple: 0 };
+        
+        // Terrain en croix
+        const zones = {
+            top: { x: 300, y: 0, w: 200, h: 200 },
+            left: { x: 0, y: 300, w: 200, h: 200 },
+            center: { x: 300, y: 300, w: 200, h: 200 },
+            right: { x: 500, y: 300, w: 200, h: 200 },
+            bottom: { x: 300, y: 500, w: 200, h: 200 }
+        };
+        
+        // Buts (dans la zone centrale)
+        const goals = {
+            green: { x: 320, y: 340, w: GOAL_WIDTH, h: GOAL_DEPTH, color: '#00ff00', dir: 'top' },
+            yellow: { x: 320, y: 460, w: GOAL_WIDTH, h: GOAL_DEPTH, color: '#ffff00', dir: 'bottom' },
+            purple: { x: 460, y: 380, w: GOAL_DEPTH, h: GOAL_WIDTH, color: '#ff00ff', dir: 'right' }
+        };
+        
+        // Balle
+        const ball = {
+            x: 400,
+            y: 400,
+            vx: 0,
+            vy: 0,
+            radius: BALL_RADIUS
+        };
+        
+        // Joueurs
+        const players = [
+            { x: 400, y: 100, vx: 0, vy: 0, team: 'green', human: false, keys: { up: 'w', left: 'a', down: 's', right: 'd' } },
+            { x: 100, y: 400, vx: 0, vy: 0, team: 'yellow', human: false, keys: { up: 'ArrowUp', left: 'ArrowLeft', down: 'ArrowDown', right: 'ArrowRight' } },
+            { x: 600, y: 400, vx: 0, vy: 0, team: 'purple', human: false, keys: { up: 'i', left: 'j', down: 'k', right: 'l' } }
+        ];
+        
+        const keysPressed = {};
+        
+        // Couleurs des équipes
+        const teamColors = {
+            green: '#00ff00',
+            yellow: '#ffff00',
+            purple: '#ff00ff'
+        };
+        
+        // Événements clavier
+        document.addEventListener('keydown', (e) => {
+            keysPressed[e.key.toLowerCase()] = true;
+            if (e.key.startsWith('Arrow')) keysPressed[e.key] = true;
+        });
+        
+        document.addEventListener('keyup', (e) => {
+            keysPressed[e.key.toLowerCase()] = false;
+            if (e.key.startsWith('Arrow')) keysPressed[e.key] = false;
+        });
+        
+        // Sélection du nombre de joueurs
+        document.getElementById('btn1Player').addEventListener('click', () => startGame(1));
+        document.getElementById('btn2Players').addEventListener('click', () => startGame(2));
+        document.getElementById('btn3Players').addEventListener('click', () => startGame(3));
+        document.getElementById('restartBtn').addEventListener('click', () => location.reload());
+        
+        function startGame(num) {
+            numHumanPlayers = num;
+            for (let i = 0; i < num; i++) {
+                players[i].human = true;
+            }
+            document.getElementById('startScreen').style.display = 'none';
+            gameStarted = true;
+            startTimer();
+            gameLoop();
+        }
+        
+        function startTimer() {
+            setInterval(() => {
+                if (!gameStarted || gameOver) return;
+                timeLeft--;
+                updateTimer();
+                if (timeLeft <= 0) {
+                    endGame();
+                }
+            }, 1000);
+        }
+        
+        function updateTimer() {
+            const minutes = Math.floor(timeLeft / 60);
+            const seconds = timeLeft % 60;
+            document.getElementById('timer').textContent = `⏱️ ${minutes}:${seconds.toString().padStart(2, '0')}`;
+        }
+        
+        function endGame() {
+            gameOver = true;
+            const maxScore = Math.max(scores.green, scores.yellow, scores.purple);
+            const winners = [];
+            if (scores.green === maxScore) winners.push('🟢 VERT');
+            if (scores.yellow === maxScore) winners.push('🟡 JAUNE');
+            if (scores.purple === maxScore) winners.push('🟣 VIOLET');
+            
+            const winnerText = winners.length > 1 ? 'ÉGALITÉ!' : winners[0] + ' GAGNE!';
+            document.getElementById('winnerText').textContent = winnerText;
+            document.getElementById('finalScores').innerHTML = `
+                <p style="font-size: 20px; margin: 10px;">🟢 VERT: ${scores.green}</p>
+                <p style="font-size: 20px; margin: 10px;">🟡 JAUNE: ${scores.yellow}</p>
+                <p style="font-size: 20px; margin: 10px;">🟣 VIOLET: ${scores.purple}</p>
+            `;
+            document.getElementById('gameOver').style.display = 'block';
+        }
+        
+        function updateScores() {
+            document.getElementById('scoreGreen').textContent = `🟢 VERT: ${scores.green}`;
+            document.getElementById('scoreYellow').textContent = `🟡 JAUNE: ${scores.yellow}`;
+            document.getElementById('scorePurple').textContent = `🟣 VIOLET: ${scores.purple}`;
+        }
+        
+        function checkGoal() {
+            for (const [team, goal] of Object.entries(goals)) {
+                if (ball.x > goal.x && ball.x < goal.x + goal.w &&
+                    ball.y > goal.y && ball.y < goal.y + goal.h) {
+                    // But marqué! On donne le point aux autres équipes
+                    for (const t in scores) {
+                        if (t !== team) scores[t]++;
+                    }
+                    updateScores();
+                    resetBall();
+                    return;
+                }
+            }
+        }
+        
+        function resetBall() {
+            ball.x = 400;
+            ball.y = 400;
+            ball.vx = (Math.random() - 0.5) * 4;
+            ball.vy = (Math.random() - 0.5) * 4;
+        }
+        
+        function isInZone(x, y) {
+            for (const zone of Object.values(zones)) {
+                if (x >= zone.x && x <= zone.x + zone.w &&
+                    y >= zone.y && y <= zone.y + zone.h) {
+                    return true;
+                }
+            }
+            return false;
+        }
+        
+        function updatePlayer(player) {
+            const speed = 3;
+            
+            if (player.human) {
+                // Contrôle humain
+                if (keysPressed[player.keys.up]) player.vy = -speed;
+                else if (keysPressed[player.keys.down]) player.vy = speed;
+                else player.vy = 0;
+                
+                if (keysPressed[player.keys.left]) player.vx = -speed;
+                else if (keysPressed[player.keys.right]) player.vx = speed;
+                else player.vx = 0;
+            } else {
+                // IA simple : suivre la balle
+                const dx = ball.x - player.x;
+                const dy = ball.y - player.y;
+                const dist = Math.sqrt(dx * dx + dy * dy);
+                
+                if (dist > 50) {
+                    player.vx = (dx / dist) * speed * 0.7;
+                    player.vy = (dy / dist) * speed * 0.7;
+                } else {
+                    player.vx *= 0.9;
+                    player.vy *= 0.9;
+                }
+            }
+            
+            const newX = player.x + player.vx;
+            const newY = player.y + player.vy;
+            
+            if (isInZone(newX, newY)) {
+                player.x = newX;
+                player.y = newY;
+            }
+        }
+        
+        function checkCollision(p1, p2) {
+            const dx = p1.x - p2.x;
+            const dy = p1.y - p2.y;
+            const dist = Math.sqrt(dx * dx + dy * dy);
+            const minDist = (p1.radius || PLAYER_RADIUS) + (p2.radius || PLAYER_RADIUS);
+            
+            if (dist < minDist) {
+                // Collision élastique simplifiée
+                const angle = Math.atan2(dy, dx);
+                const targetX = p2.x + Math.cos(angle) * minDist;
+                const targetY = p2.y + Math.sin(angle) * minDist;
+                
+                const ax = (targetX - p1.x) * 0.5;
+                const ay = (targetY - p1.y) * 0.5;
+                
+                if (p1 === ball) {
+                    ball.vx -= ax;
+                    ball.vy -= ay;
+                    // Transfert d'énergie du joueur à la balle
+                    ball.vx += p2.vx * 0.5;
+                    ball.vy += p2.vy * 0.5;
+                }
+            }
+        }
+        
+        function updateBall() {
+            ball.x += ball.vx;
+            ball.y += ball.vy;
+            
+            // Friction
+            ball.vx *= 0.98;
+            ball.vy *= 0.98;
+            
+            // Vérifier si dans une zone valide
+            if (!isInZone(ball.x, ball.y)) {
+                ball.x -= ball.vx;
+                ball.y -= ball.vy;
+                ball.vx *= -0.8;
+                ball.vy *= -0.8;
+            }
+            
+            // Collision avec les joueurs
+            for (const player of players) {
+                checkCollision(ball, player);
+            }
+            
+            // Vérifier les buts
+            checkGoal();
+        }
+        
+        function drawZones() {
+            ctx.fillStyle = '#0a4d0a';
+            ctx.fillRect(0, 0, 800, 800);
+            
+            // Dessiner les zones valides
+            ctx.fillStyle = '#0d6b0d';
+            for (const zone of Object.values(zones)) {
+                ctx.fillRect(zone.x, zone.y, zone.w, zone.h);
+            }
+            
+            // Zone centrale en surbrillance
+            ctx.fillStyle = '#107010';
+            ctx.fillRect(zones.center.x, zones.center.y, zones.center.w, zones.center.h);
+            
+            // Bordures
+            ctx.strokeStyle = '#00ff00';
+            ctx.lineWidth = 3;
+            for (const zone of Object.values(zones)) {
+                ctx.strokeRect(zone.x, zone.y, zone.w, zone.h);
+            }
+        }
+        
+        function drawGoals() {
+            for (const [team, goal] of Object.entries(goals)) {
+                ctx.fillStyle = goal.color;
+                ctx.fillRect(goal.x, goal.y, goal.w, goal.h);
+                ctx.strokeStyle = '#ffffff';
+                ctx.lineWidth = 2;
+                ctx.strokeRect(goal.x, goal.y, goal.w, goal.h);
+            }
+        }
+        
+        function drawPlayers() {
+            for (const player of players) {
+                ctx.fillStyle = teamColors[player.team];
+                ctx.beginPath();
+                ctx.arc(player.x, player.y, PLAYER_RADIUS, 0, Math.PI * 2);
+                ctx.fill();
+                
+                // Contour blanc pour joueurs humains
+                if (player.human) {
+                    ctx.strokeStyle = '#ffffff';
+                    ctx.lineWidth = 3;
+                    ctx.stroke();
+                }
+            }
+        }
+        
+        function drawBall() {
+            ctx.fillStyle = '#ffffff';
+            ctx.beginPath();
+            ctx.arc(ball.x, ball.y, ball.radius, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.strokeStyle = '#000000';
+            ctx.lineWidth = 2;
+            ctx.stroke();
+        }
+        
+        function gameLoop() {
+            if (!gameStarted || gameOver) return;
+            
+            // Update
+            for (const player of players) {
+                updatePlayer(player);
+            }
+            updateBall();
+            
+            // Draw
+            drawZones();
+            drawGoals();
+            drawPlayers();
+            drawBall();
+            
+            requestAnimationFrame(gameLoop);
+        }
+    </script>
+</body>
+</html>
